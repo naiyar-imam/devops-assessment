@@ -6,6 +6,10 @@ resource "aws_security_group" "app_sg" {
   name        = "devops-sg"
   description = "Allow SSH, HTTP, HTTPS"
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   ingress {
     from_port   = 80
     to_port     = 80
