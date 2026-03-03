@@ -3,7 +3,7 @@ provider "aws" {
 }
 
 resource "aws_security_group" "app_sg" {
-  name        = "devops-sg"
+  name_prefix = "devops-sg-"
   description = "Allow SSH, HTTP, HTTPS"
 
   lifecycle {
