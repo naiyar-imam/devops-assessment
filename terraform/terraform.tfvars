@@ -1,2 +1,2 @@
 region   = "ap-south-1"
-key_name = "devops-key"
+key_name = "naiyar"
