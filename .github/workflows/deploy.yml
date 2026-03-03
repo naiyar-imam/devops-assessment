@@ -69,3 +69,7 @@ jobs:
           docker run -d -p 8000:8000 --name backend ${{ secrets.ECR_BACKEND_REPO }}:${{ github.sha }}
           docker run -d -p 80:80 --name frontend ${{ secrets.ECR_FRONTEND_REPO }}:${{ github.sha }}
         EOF
+
+
+
+        
