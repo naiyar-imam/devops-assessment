@@ -44,6 +44,9 @@ jobs:
         terraform init
         terraform apply -auto-approve
 
+    - name: Wait for EC2 to be ready
+      run: sleep 30
+
     - name: Deploy to EC2
       run: |
         echo "${{ secrets.EC2_KEY }}" > key.pem
@@ -54,7 +57,9 @@ jobs:
           --query "Reservations[*].Instances[*].PublicIpAddress" \
           --output text)
 
-        ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$EC2_IP << EOF
+        echo "Connecting to EC2 at $EC2_IP"
+
+        ssh -o StrictHostKeyChecking=no -i key.pem ec2-user@$EC2_IP << EOF
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
           | docker login --username AWS --password-stdin $(echo ${{ secrets.ECR_BACKEND_REPO }} | cut -d'/' -f1)
 
@@ -69,7 +74,3 @@ jobs:
           docker run -d -p 8000:8000 --name backend ${{ secrets.ECR_BACKEND_REPO }}:${{ github.sha }}
           docker run -d -p 80:80 --name frontend ${{ secrets.ECR_FRONTEND_REPO }}:${{ github.sha }}
         EOF
-
-
-
-        

@@ -3,51 +3,55 @@ provider "aws" {
 }
 
 resource "aws_security_group" "app_sg" {
-  name = "devops-sg"
+  name        = "devops-sg"
+  description = "Allow SSH, HTTP, HTTPS"
 
   ingress {
-    from_port = 80
-    to_port = 80
-    protocol = "tcp"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
-    from_port = 443
-    to_port = 443
-    protocol = "tcp"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
-    from_port = 22
-    to_port = 22
-    protocol = "tcp"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
-    from_port = 0
-    to_port = 0
-    protocol = "-1"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
 
 resource "aws_instance" "app_server" {
-  ami           = "ami-0f58b397bc5c1f2e8" # Ubuntu (update per region)
+  ami           = "ami-0f58b397bc5c1f2e8" # Amazon Linux
   instance_type = "t2.micro"
 
-  security_groups = [aws_security_group.app_sg.name]
+  # IMPORTANT: Use ID, not name
+  vpc_security_group_ids = [aws_security_group.app_sg.id]
 
   key_name = var.key_name
 
   user_data = <<-EOF
-              #!/bin/bash
-              apt update
-              apt install docker.io -y
-              usermod -aG docker ubuntu
-              EOF
+#!/bin/bash
+yum update -y
+yum install docker -y
+systemctl start docker
+systemctl enable docker
+usermod -aG docker ec2-user
+EOF
 
   tags = {
     Name = "DevOps-App-Server"
