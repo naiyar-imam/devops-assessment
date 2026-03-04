@@ -64,12 +64,12 @@ jobs:
 
     # Get EC2 public IP dynamically
     - name: Get EC2 Public IP
-      id: ec2
+      #id: ec2
       run: |
         EC2_IP=$(aws ec2 describe-instances \
           --filters "Name=tag:Name,Values=DevOps-App-Server" \
           --query "Reservations[].Instances[].PublicIpAddress" \
-          --output text)
+          --output text | head -n 1)
 
         echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
 
