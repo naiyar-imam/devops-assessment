@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
     - name: Checkout repository
       uses: actions/checkout@v4
 
@@ -23,12 +24,12 @@ jobs:
         aws-region: ${{ secrets.AWS_REGION }}
 
 
-    # Login to ECR
+    # Login to Amazon ECR
     - name: Login to Amazon ECR
       uses: aws-actions/amazon-ecr-login@v2
 
 
-    # Build and push backend image
+    # Build and push backend
     - name: Build Backend
       run: |
         docker build -t backend ./backend
@@ -36,7 +37,7 @@ jobs:
         docker push ${{ secrets.ECR_BACKEND_REPO }}:${{ github.sha }}
 
 
-    # Build and push frontend image
+    # Build and push frontend
     - name: Build Frontend
       run: |
         docker build -t frontend ./frontend
@@ -57,24 +58,24 @@ jobs:
         terraform apply -auto-approve
 
 
-    # Wait for EC2 startup
-    - name: Wait for EC2 to start
-      run: sleep 60
+    # Wait for instance boot
+    - name: Wait for EC2 startup
+      run: sleep 90
 
 
     # Get EC2 public IP dynamically
     - name: Get EC2 Public IP
-      #id: ec2
       run: |
         EC2_IP=$(aws ec2 describe-instances \
-          --filters "Name=tag:Name,Values=DevOps-App-Server" \
+          --filters "Name=tag:Name,Values=DevOps-App-Server" "Name=instance-state-name,Values=running" \
           --query "Reservations[].Instances[].PublicIpAddress" \
-          --output text | head -n 1)
+          --output text | awk '{print $1}')
 
         echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
+        echo "Using EC2 IP: $EC2_IP"
 
 
-    # Deploy containers via SSH
+    # Deploy containers to EC2
     - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.3
       with:
