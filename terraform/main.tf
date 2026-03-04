@@ -46,7 +46,7 @@ resource "aws_instance" "app_server" {
   # IMPORTANT: Use ID, not name
   vpc_security_group_ids = [aws_security_group.app_sg.id]
 
-  key_name = var.key_name
+  key_name = "naiyar"
 
   user_data = <<-EOF
 #!/bin/bash
