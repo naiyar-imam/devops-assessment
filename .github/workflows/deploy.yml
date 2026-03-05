@@ -29,7 +29,7 @@ jobs:
       uses: aws-actions/amazon-ecr-login@v2
 
 
-    # Build and push backend
+    # Build and push backend image
     - name: Build Backend
       run: |
         docker build -t backend ./backend
@@ -37,7 +37,7 @@ jobs:
         docker push ${{ secrets.ECR_BACKEND_REPO }}:${{ github.sha }}
 
 
-    # Build and push frontend
+    # Build and push frontend image
     - name: Build Frontend
       run: |
         docker build -t frontend ./frontend
@@ -83,16 +83,32 @@ jobs:
         username: ubuntu
         key: ${{ secrets.EC2_KEY }}
         script: |
+
+          # Install Docker and AWS CLI if missing
+          sudo apt update -y
+          sudo apt install -y docker.io awscli
+
+          # Start Docker
+          sudo systemctl start docker
+          sudo systemctl enable docker
+
+          # Allow ubuntu user to run docker
+          sudo usermod -aG docker ubuntu
+
+          # Login to ECR
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
-          | docker login --username AWS --password-stdin $(echo ${{ secrets.ECR_BACKEND_REPO }} | cut -d'/' -f1)
+          | sudo docker login --username AWS --password-stdin $(echo ${{ secrets.ECR_BACKEND_REPO }} | cut -d'/' -f1)
 
-          docker pull ${{ secrets.ECR_BACKEND_REPO }}:${{ github.sha }}
-          docker pull ${{ secrets.ECR_FRONTEND_REPO }}:${{ github.sha }}
+          # Pull images
+          sudo docker pull ${{ secrets.ECR_BACKEND_REPO }}:${{ github.sha }}
+          sudo docker pull ${{ secrets.ECR_FRONTEND_REPO }}:${{ github.sha }}
 
-          docker stop backend || true
-          docker stop frontend || true
-          docker rm backend || true
-          docker rm frontend || true
+          # Stop old containers
+          sudo docker stop backend || true
+          sudo docker stop frontend || true
+          sudo docker rm backend || true
+          sudo docker rm frontend || true
 
-          docker run -d -p 8000:8000 --name backend ${{ secrets.ECR_BACKEND_REPO }}:${{ github.sha }}
-          docker run -d -p 80:80 --name frontend ${{ secrets.ECR_FRONTEND_REPO }}:${{ github.sha }}
+          # Run new containers
+          sudo docker run -d -p 8000:8000 --name backend ${{ secrets.ECR_BACKEND_REPO }}:${{ github.sha }}
+          sudo docker run -d -p 80:80 --name frontend ${{ secrets.ECR_FRONTEND_REPO }}:${{ github.sha }}
