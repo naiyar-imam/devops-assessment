@@ -36,7 +36,7 @@ resource "aws_security_group" "app_sg" {
   }
 
   ingress {
-    description = "Backend App"
+    description = "Backend"
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
@@ -53,7 +53,7 @@ resource "aws_security_group" "app_sg" {
 
 # EC2 Instance
 resource "aws_instance" "app_server" {
-  ami           = "ami-0f58b397bc5c1f2e8"  # Ubuntu AMI
+  ami           = "ami-0f58b397bc5c1f2e8"
   instance_type = "t2.micro"
 
   key_name = "devops-key"
@@ -66,13 +66,23 @@ resource "aws_instance" "app_server" {
 
   user_data = <<-EOF
 #!/bin/bash
+
+# Update system
 apt update -y
+
+# Install Docker
 apt install docker.io -y
 
+# Start and enable Docker
 systemctl start docker
 systemctl enable docker
 
+# Allow ubuntu user to run docker
 usermod -aG docker ubuntu
+
+# Install AWS CLI
+apt install awscli -y
+
 EOF
 
   tags = {
