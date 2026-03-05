@@ -29,7 +29,7 @@ jobs:
       uses: aws-actions/amazon-ecr-login@v2
 
 
-    # Build backend image
+    # Build Backend Image
     - name: Build Backend
       run: |
         docker build -t backend ./backend
@@ -37,7 +37,7 @@ jobs:
         docker push ${{ secrets.ECR_BACKEND_REPO }}:${{ github.sha }}
 
 
-    # Build frontend image
+    # Build Frontend Image
     - name: Build Frontend
       run: |
         docker build -t frontend ./frontend
@@ -58,12 +58,12 @@ jobs:
         terraform apply -auto-approve
 
 
-    # Wait for instance boot
+    # Wait for EC2 startup
     - name: Wait for EC2 startup
       run: sleep 60
 
 
-    # Get EC2 IP from Terraform output
+    # Get EC2 Public IP
     - name: Get EC2 IP
       run: |
         cd terraform
@@ -81,23 +81,34 @@ jobs:
         key: ${{ secrets.EC2_KEY }}
         script: |
 
-          sudo apt update -y
-          sudo apt install -y docker.io awscli
+          # Update system
+          sudo yum update -y
 
+          # Install Docker
+          sudo yum install -y docker
+
+          # Start Docker
           sudo systemctl start docker
           sudo systemctl enable docker
 
+          # Install AWS CLI
+          sudo yum install -y aws-cli
+
+          # Login to ECR
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
           | sudo docker login --username AWS --password-stdin $(echo ${{ secrets.ECR_BACKEND_REPO }} | cut -d'/' -f1)
 
+          # Pull images
           sudo docker pull ${{ secrets.ECR_BACKEND_REPO }}:${{ github.sha }}
           sudo docker pull ${{ secrets.ECR_FRONTEND_REPO }}:${{ github.sha }}
 
+          # Stop old containers
           sudo docker stop backend || true
           sudo docker stop frontend || true
 
           sudo docker rm backend || true
           sudo docker rm frontend || true
 
+          # Run new containers
           sudo docker run -d -p 8000:8000 --name backend ${{ secrets.ECR_BACKEND_REPO }}:${{ github.sha }}
           sudo docker run -d -p 80:80 --name frontend ${{ secrets.ECR_FRONTEND_REPO }}:${{ github.sha }}
