@@ -157,3 +157,5 @@ aws --version
 EOF
 
 }
+
+# Output the public IP of the EC2 instanceSSS
