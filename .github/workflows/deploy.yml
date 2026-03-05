@@ -6,17 +6,17 @@ on:
       - main
 
 jobs:
-
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
 
-    - name: Checkout
+    - name: Checkout repository
       uses: actions/checkout@v4
 
 
-    - name: Configure AWS
+    # Configure AWS credentials
+    - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -24,10 +24,12 @@ jobs:
         aws-region: ${{ secrets.AWS_REGION }}
 
 
-    - name: Login to ECR
+    # Login to Amazon ECR
+    - name: Login to Amazon ECR
       uses: aws-actions/amazon-ecr-login@v2
 
 
+    # Build backend image
     - name: Build Backend
       run: |
         docker build -t backend ./backend
@@ -35,6 +37,7 @@ jobs:
         docker push ${{ secrets.ECR_BACKEND_REPO }}:${{ github.sha }}
 
 
+    # Build frontend image
     - name: Build Frontend
       run: |
         docker build -t frontend ./frontend
@@ -42,17 +45,35 @@ jobs:
         docker push ${{ secrets.ECR_FRONTEND_REPO }}:${{ github.sha }}
 
 
+    # Setup Terraform
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+
+
+    # Run Terraform
+    - name: Terraform Apply
+      run: |
+        cd terraform
+        terraform init
+        terraform apply -auto-approve
+
+
+    # Wait for instance boot
+    - name: Wait for EC2 startup
+      run: sleep 60
+
+
+    # Get EC2 IP from Terraform output
     - name: Get EC2 IP
       run: |
-        EC2_IP=$(aws ec2 describe-instances \
-        --filters "Name=tag:Name,Values=DevOps-App-Server" \
-        --query "Reservations[].Instances[].PublicIpAddress" \
-        --output text | awk '{print $1}')
-
+        cd terraform
+        EC2_IP=$(terraform output -raw public_ip)
         echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
+        echo "EC2 IP is $EC2_IP"
 
 
-    - name: Deploy
+    # Deploy containers to EC2
+    - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ env.EC2_IP }}
