@@ -7,7 +7,7 @@ data "aws_vpc" "default" {
   default = true
 }
 
-# Get default subnets
+# Get a public subnet from default VPC
 data "aws_subnets" "default" {
   filter {
     name   = "vpc-id"
@@ -20,9 +20,11 @@ resource "aws_security_group" "app_sg" {
 
   name_prefix = "devops-sg-"
   description = "Allow SSH, HTTP, Backend"
-  vpc_id      = data.aws_vpc.default.id
+
+  vpc_id = data.aws_vpc.default.id
 
   ingress {
+    description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -30,6 +32,7 @@ resource "aws_security_group" "app_sg" {
   }
 
   ingress {
+    description = "Frontend"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -37,6 +40,7 @@ resource "aws_security_group" "app_sg" {
   }
 
   ingress {
+    description = "Backend"
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
@@ -66,6 +70,20 @@ resource "aws_instance" "app_server" {
   ]
 
   associate_public_ip_address = true
+
+  # Install Docker and AWS CLI automatically
+  user_data = <<-EOF
+#!/bin/bash
+
+apt update -y
+apt install -y docker.io awscli
+
+systemctl start docker
+systemctl enable docker
+
+usermod -aG docker ubuntu
+
+EOF
 
   tags = {
     Name = "DevOps-App-Server"
