@@ -1,2 +1,3 @@
-variable "region" {}
-variable "key_name" {}
+variable "region" {
+  default = "ap-south-1"
+}

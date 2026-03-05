@@ -6,17 +6,17 @@ on:
       - main
 
 jobs:
-  deploy:
+
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
 
-    - name: Checkout repository
+    - name: Checkout
       uses: actions/checkout@v4
 
 
-    # Configure AWS credentials
-    - name: Configure AWS credentials
+    - name: Configure AWS
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -24,12 +24,10 @@ jobs:
         aws-region: ${{ secrets.AWS_REGION }}
 
 
-    # Login to Amazon ECR
-    - name: Login to Amazon ECR
+    - name: Login to ECR
       uses: aws-actions/amazon-ecr-login@v2
 
 
-    # Build and push backend image
     - name: Build Backend
       run: |
         docker build -t backend ./backend
@@ -37,7 +35,6 @@ jobs:
         docker push ${{ secrets.ECR_BACKEND_REPO }}:${{ github.sha }}
 
 
-    # Build and push frontend image
     - name: Build Frontend
       run: |
         docker build -t frontend ./frontend
@@ -45,38 +42,17 @@ jobs:
         docker push ${{ secrets.ECR_FRONTEND_REPO }}:${{ github.sha }}
 
 
-    # Setup Terraform
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
-
-
-    # Run Terraform
-    - name: Terraform Apply
-      run: |
-        cd terraform
-        terraform init
-        terraform apply -auto-approve
-
-
-    # Wait for instance boot
-    - name: Wait for EC2 startup
-      run: sleep 90
-
-
-    # Get EC2 public IP dynamically
-    - name: Get EC2 Public IP
+    - name: Get EC2 IP
       run: |
         EC2_IP=$(aws ec2 describe-instances \
-          --filters "Name=tag:Name,Values=DevOps-App-Server" "Name=instance-state-name,Values=running" \
-          --query "Reservations[].Instances[].PublicIpAddress" \
-          --output text | awk '{print $1}')
+        --filters "Name=tag:Name,Values=DevOps-App-Server" \
+        --query "Reservations[].Instances[].PublicIpAddress" \
+        --output text | awk '{print $1}')
 
         echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
-        echo "Using EC2 IP: $EC2_IP"
 
 
-    # Deploy containers to EC2
-    - name: Deploy to EC2
+    - name: Deploy
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ env.EC2_IP }}
@@ -84,31 +60,23 @@ jobs:
         key: ${{ secrets.EC2_KEY }}
         script: |
 
-          # Install Docker and AWS CLI if missing
           sudo apt update -y
           sudo apt install -y docker.io awscli
 
-          # Start Docker
           sudo systemctl start docker
           sudo systemctl enable docker
 
-          # Allow ubuntu user to run docker
-          sudo usermod -aG docker ubuntu
-
-          # Login to ECR
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
           | sudo docker login --username AWS --password-stdin $(echo ${{ secrets.ECR_BACKEND_REPO }} | cut -d'/' -f1)
 
-          # Pull images
           sudo docker pull ${{ secrets.ECR_BACKEND_REPO }}:${{ github.sha }}
           sudo docker pull ${{ secrets.ECR_FRONTEND_REPO }}:${{ github.sha }}
 
-          # Stop old containers
           sudo docker stop backend || true
           sudo docker stop frontend || true
+
           sudo docker rm backend || true
           sudo docker rm frontend || true
 
-          # Run new containers
           sudo docker run -d -p 8000:8000 --name backend ${{ secrets.ECR_BACKEND_REPO }}:${{ github.sha }}
           sudo docker run -d -p 80:80 --name frontend ${{ secrets.ECR_FRONTEND_REPO }}:${{ github.sha }}
