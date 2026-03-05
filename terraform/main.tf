@@ -1,25 +1,57 @@
-provider "aws" {
-  region = var.region
+# Create VPC
+resource "aws_vpc" "devops_vpc" {
+  cidr_block = "10.0.0.0/16"
+
+  tags = {
+    Name = "devops-vpc"
+  }
 }
 
-# Get default VPC
-data "aws_vpc" "default" {
-  default = true
+# Internet Gateway
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.devops_vpc.id
+
+  tags = {
+    Name = "devops-igw"
+  }
 }
 
-# Get a public subnet from default VPC
-data "aws_subnet" "default_public" {
-  default_for_az = true
-  availability_zone = "${var.region}a"
+# Public Subnet
+resource "aws_subnet" "public_subnet" {
+  vpc_id                  = aws_vpc.devops_vpc.id
+  cidr_block              = "10.0.1.0/24"
+  map_public_ip_on_launch = true
+  availability_zone       = "ap-south-1a"
+
+  tags = {
+    Name = "devops-public-subnet"
+  }
+}
+
+# Route Table
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.devops_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+
+  tags = {
+    Name = "devops-route-table"
+  }
+}
+
+# Associate Route Table with Subnet
+resource "aws_route_table_association" "rt_assoc" {
+  subnet_id      = aws_subnet.public_subnet.id
+  route_table_id = aws_route_table.public_rt.id
 }
 
 # Security Group
 resource "aws_security_group" "app_sg" {
-
-  name_prefix = "devops-sg-"
-  description = "Allow SSH, HTTP, Backend"
-
-  vpc_id = data.aws_vpc.default.id
+  name   = "devops-sg"
+  vpc_id = aws_vpc.devops_vpc.id
 
   ingress {
     description = "SSH"
@@ -30,7 +62,7 @@ resource "aws_security_group" "app_sg" {
   }
 
   ingress {
-    description = "Frontend"
+    description = "HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -45,6 +77,14 @@ resource "aws_security_group" "app_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -55,42 +95,24 @@ resource "aws_security_group" "app_sg" {
 
 # EC2 Instance
 resource "aws_instance" "app_server" {
-
   ami           = "ami-0f58b397bc5c1f2e8"
   instance_type = "t2.micro"
+  key_name      = "devops-key"
 
-  key_name = "devops-key"
-
-  subnet_id = data.aws_subnet.default_public.id
-
-  vpc_security_group_ids = [
-    aws_security_group.app_sg.id
-  ]
+  subnet_id              = aws_subnet.public_subnet.id
+  vpc_security_group_ids = [aws_security_group.app_sg.id]
 
   associate_public_ip_address = true
-
-  # Install Docker and AWS CLI automatically
-  user_data = <<-EOF
-#!/bin/bash
-
-sudo apt update
-sudo apt install ca-certificates curl gnupg -y
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null 
-sudo apt update
-sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin - y
-
-systemctl start docker
-systemctl enable docker
-
-usermod -aG docker ubuntu
-
-EOF
 
   tags = {
     Name = "DevOps-App-Server"
   }
+
+  user_data = <<-EOF
+#!/bin/bash
+apt update -y
+apt install -y docker.io awscli
+systemctl start docker
+systemctl enable docker
+EOF
 }
