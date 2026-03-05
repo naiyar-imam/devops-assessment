@@ -2,33 +2,23 @@ provider "aws" {
   region = var.region
 }
 
-# Security Group
+# Get default VPC
+data "aws_vpc" "default" {
+  default = true
+}
+
+# Get default subnet
+data "aws_subnet_ids" "default" {
+  vpc_id = data.aws_vpc.default.id
+}
+
+# Security group
 resource "aws_security_group" "app_sg" {
   name_prefix = "devops-sg-"
-  description = "Allow SSH, HTTP, HTTPS, Backend"
-
-  lifecycle {
-    create_before_destroy = true
-  }
+  description = "Allow SSH, HTTP, Backend"
+  vpc_id      = data.aws_vpc.default.id
 
   ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "HTTPS"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -36,7 +26,13 @@ resource "aws_security_group" "app_sg" {
   }
 
   ingress {
-    description = "Backend"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
@@ -53,37 +49,19 @@ resource "aws_security_group" "app_sg" {
 
 # EC2 Instance
 resource "aws_instance" "app_server" {
+
   ami           = "ami-0f58b397bc5c1f2e8"
   instance_type = "t2.micro"
 
   key_name = "devops-key"
+
+  subnet_id = data.aws_subnet_ids.default.ids[0]
 
   vpc_security_group_ids = [
     aws_security_group.app_sg.id
   ]
 
   associate_public_ip_address = true
-
-  user_data = <<-EOF
-#!/bin/bash
-
-# Update system
-apt update -y
-
-# Install Docker
-apt install docker.io -y
-
-# Start and enable Docker
-systemctl start docker
-systemctl enable docker
-
-# Allow ubuntu user to run docker
-usermod -aG docker ubuntu
-
-# Install AWS CLI
-apt install awscli -y
-
-EOF
 
   tags = {
     Name = "DevOps-App-Server"
