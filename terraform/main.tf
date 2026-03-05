@@ -8,11 +8,9 @@ data "aws_vpc" "default" {
 }
 
 # Get a public subnet from default VPC
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
+data "aws_subnet" "default_public" {
+  default_for_az = true
+  availability_zone = "${var.region}a"
 }
 
 # Security Group
@@ -63,7 +61,7 @@ resource "aws_instance" "app_server" {
 
   key_name = "devops-key"
 
-  subnet_id = data.aws_subnets.default.ids[0]
+  subnet_id = data.aws_subnet.default_public.id
 
   vpc_security_group_ids = [
     aws_security_group.app_sg.id
