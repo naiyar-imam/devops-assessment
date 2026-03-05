@@ -1,4 +1,10 @@
+provider "aws" {
+  region = "ap-south-1"
+}
+
+# -----------------------------
 # Create VPC
+# -----------------------------
 resource "aws_vpc" "devops_vpc" {
   cidr_block = "10.0.0.0/16"
 
@@ -7,8 +13,10 @@ resource "aws_vpc" "devops_vpc" {
   }
 }
 
+# -----------------------------
 # Internet Gateway
-resource "aws_internet_gateway" "igw" {
+# -----------------------------
+resource "aws_internet_gateway" "devops_igw" {
   vpc_id = aws_vpc.devops_vpc.id
 
   tags = {
@@ -16,25 +24,29 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
+# -----------------------------
 # Public Subnet
+# -----------------------------
 resource "aws_subnet" "public_subnet" {
   vpc_id                  = aws_vpc.devops_vpc.id
   cidr_block              = "10.0.1.0/24"
-  map_public_ip_on_launch = true
   availability_zone       = "ap-south-1a"
+  map_public_ip_on_launch = true
 
   tags = {
     Name = "devops-public-subnet"
   }
 }
 
+# -----------------------------
 # Route Table
-resource "aws_route_table" "public_rt" {
+# -----------------------------
+resource "aws_route_table" "public_route_table" {
   vpc_id = aws_vpc.devops_vpc.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
+    gateway_id = aws_internet_gateway.devops_igw.id
   }
 
   tags = {
@@ -42,15 +54,19 @@ resource "aws_route_table" "public_rt" {
   }
 }
 
-# Associate Route Table with Subnet
-resource "aws_route_table_association" "rt_assoc" {
+# -----------------------------
+# Route Table Association
+# -----------------------------
+resource "aws_route_table_association" "public_rt_assoc" {
   subnet_id      = aws_subnet.public_subnet.id
-  route_table_id = aws_route_table.public_rt.id
+  route_table_id = aws_route_table.public_route_table.id
 }
 
+# -----------------------------
 # Security Group
-resource "aws_security_group" "app_sg" {
-  name   = "devops-sg"
+# -----------------------------
+resource "aws_security_group" "devops_sg" {
+  name   = "devops-security-group"
   vpc_id = aws_vpc.devops_vpc.id
 
   ingress {
@@ -91,16 +107,23 @@ resource "aws_security_group" "app_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = {
+    Name = "devops-security-group"
+  }
 }
 
+# -----------------------------
 # EC2 Instance
-resource "aws_instance" "app_server" {
-  ami           = "ami-0f58b397bc5c1f2e8"
+# -----------------------------
+resource "aws_instance" "devops_server" {
+
+  ami           = "ami-03bb6d83c60fc5f7c"   # Amazon Linux (Mumbai region)
   instance_type = "t2.micro"
   key_name      = "devops-key"
 
   subnet_id              = aws_subnet.public_subnet.id
-  vpc_security_group_ids = [aws_security_group.app_sg.id]
+  vpc_security_group_ids = [aws_security_group.devops_sg.id]
 
   associate_public_ip_address = true
 
@@ -110,9 +133,27 @@ resource "aws_instance" "app_server" {
 
   user_data = <<-EOF
 #!/bin/bash
-apt update -y
-apt install -y docker.io awscli
-systemctl start docker
-systemctl enable docker
+
+# Update packages
+sudo yum update -y
+
+# Install Docker
+sudo yum install -y docker
+
+# Start Docker
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Allow ec2-user to run docker commands
+sudo usermod -aG docker ec2-user
+
+# Install AWS CLI
+sudo yum install -y aws-cli
+
+# Verify installations
+docker --version
+aws --version
+
 EOF
+
 }

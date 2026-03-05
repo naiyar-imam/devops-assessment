@@ -77,7 +77,7 @@ jobs:
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ env.EC2_IP }}
-        username: ubuntu
+        username: ec2-user
         key: ${{ secrets.EC2_KEY }}
         script: |
 
