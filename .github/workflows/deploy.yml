@@ -1,4 +1,4 @@
-name: DevOps Full CI-CD Pipeline
+name: DevOps CI/CD Pipeline
 
 on:
   push:
@@ -6,82 +6,75 @@ on:
       - main
 
 jobs:
+
   deploy:
     runs-on: ubuntu-latest
 
     steps:
 
-      # Checkout repository
-      - name: Checkout Code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      # Configure AWS credentials
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+    - name: Configure AWS
+      uses: aws-actions/configure-aws-credentials@v3
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
-      # Setup Terraform
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
 
-      # Terraform Init
-      - name: Terraform Init
-        working-directory: terraform
-        run: terraform init
+    - name: Terraform Init
+      run: |
+        cd terraform
+        terraform init
 
-      # Terraform Apply
-      - name: Terraform Apply
-        working-directory: terraform
-        run: terraform apply -auto-approve
+    - name: Terraform Apply
+      run: |
+        cd terraform
+        terraform apply -auto-approve -var="key_name=my-key"
 
-      # Login to Amazon ECR
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+    - name: Get EC2 Public IP
+      id: ec2
+      run: |
+        cd terraform
+        echo "EC2_IP=$(terraform output -raw ec2_public_ip)" >> $GITHUB_ENV
 
-      # Build and push backend image
-      - name: Build & Push Backend
-        run: |
-          docker build -t backend ./backend
-          docker tag backend:latest ${{ steps.login-ecr.outputs.registry }}/devops-backend:${{ github.sha }}
-          docker push ${{ steps.login-ecr.outputs.registry }}/devops-backend:${{ github.sha }}
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
 
-      # Build and push frontend image
-      - name: Build & Push Frontend
-        run: |
-          docker build -t frontend ./frontend
-          docker tag frontend:latest ${{ steps.login-ecr.outputs.registry }}/devops-frontend:${{ github.sha }}
-          docker push ${{ steps.login-ecr.outputs.registry }}/devops-frontend:${{ github.sha }}
+    - name: Build Backend Image
+      run: |
+        docker build -t backend ./backend
+        docker tag backend:latest ${{ steps.login-ecr.outputs.registry }}/devops-backend:${{ github.sha }}
+        docker push ${{ steps.login-ecr.outputs.registry }}/devops-backend:${{ github.sha }}
 
-      # Get EC2 Public IP
-      - name: Get EC2 Public IP
-        working-directory: terraform
-        run: |
-          echo "EC2_IP=$(terraform output -raw ec2_public_ip)" >> $GITHUB_ENV
+    - name: Build Frontend Image
+      run: |
+        docker build -t frontend ./frontend
+        docker tag frontend:latest ${{ steps.login-ecr.outputs.registry }}/devops-frontend:${{ github.sha }}
+        docker push ${{ steps.login-ecr.outputs.registry }}/devops-frontend:${{ github.sha }}
 
-      # Wait for EC2 SSH
-      - name: Wait for EC2
-        run: sleep 40
+    - name: Deploy on EC2
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ env.EC2_IP }}
+        username: ubuntu
+        key: ${{ secrets.EC2_KEY }}
+        script: |
 
-      # Deploy to EC2
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ env.EC2_IP }}
-          username: ubuntu
-          key: ${{ secrets.EC2_KEY }}
-          port: 22
-          script: |
-            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
-            | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+          sudo apt update
+          sudo apt install docker.io -y
+          sudo systemctl start docker
 
-            docker pull ${{ steps.login-ecr.outputs.registry }}/devops-backend:${{ github.sha }}
-            docker pull ${{ steps.login-ecr.outputs.registry }}/devops-frontend:${{ github.sha }}
+          aws ecr get-login-password --region ap-south-1 | \
+          docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
 
-            docker stop backend || true
-            docker rm backend || true
+          docker pull ${{ steps.login-ecr.outputs.registry }}/devops-backend:${{ github.sha }}
+          docker pull ${{ steps.login-ecr.outputs.registry }}/devops-frontend:${{ github.sha }}
 
-            docker run -d -p 5000:5000 --name backend ${{ steps.login-ecr.outputs.registry }}/devops-backend:${{ github.sha }}
+          docker run -d -p 8000:8000 ${{ steps.login-ecr.outputs.registry }}/devops-backend:${{ github.sha }}
+
+          docker run -d -p 80:80 ${{ steps.login-ecr.outputs.registry }}/devops-frontend:${{ github.sha }}
