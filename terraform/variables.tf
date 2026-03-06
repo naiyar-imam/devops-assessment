@@ -3,5 +3,5 @@ variable "region" {
 }
 
 variable "key_name" {
-  description = "EC2 Key Pair"
+  description = "EC2 Key Pair Name"
 }

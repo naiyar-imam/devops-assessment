@@ -1,23 +1,69 @@
+############################################
+# TERRAFORM CONFIGURATION
+############################################
+
+terraform {
+
+  required_providers {
+
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
+
+  }
+
+}
+
+############################################
+# AWS PROVIDER
+############################################
+
 provider "aws" {
   region = var.region
 }
 
-# Default VPC
+############################################
+# RANDOM SUFFIX (AVOID NAME COLLISION)
+############################################
+
+resource "random_id" "suffix" {
+  byte_length = 3
+}
+
+############################################
+# DEFAULT VPC
+############################################
+
 data "aws_vpc" "default" {
   default = true
 }
 
-# Subnets
+############################################
+# DEFAULT SUBNETS
+############################################
+
 data "aws_subnets" "default" {
+
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
   }
+
 }
 
+############################################
 # SECURITY GROUP
+############################################
+
 resource "aws_security_group" "app_sg" {
-  name   = "devops-assessment-sg"
+
+  name   = "devops-assessment-sg-${random_id.suffix.hex}"
   vpc_id = data.aws_vpc.default.id
 
   ingress {
@@ -47,62 +93,102 @@ resource "aws_security_group" "app_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
 }
 
-# IAM ROLE
+############################################
+# IAM ROLE FOR EC2
+############################################
+
 resource "aws_iam_role" "ec2_role" {
-  name = "devops-ec2-role"
+
+  name = "devops-ec2-role-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
+
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
+
+    Statement = [
+
+      {
+        Effect = "Allow"
+
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+
+        Action = "sts:AssumeRole"
       }
-      Action = "sts:AssumeRole"
-    }]
+
+    ]
+
   })
+
 }
 
-# ECR READ ACCESS
+############################################
+# ATTACH ECR READ POLICY
+############################################
+
 resource "aws_iam_role_policy_attachment" "ecr_read" {
+
   role       = aws_iam_role.ec2_role.name
+
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+
 }
 
+############################################
 # INSTANCE PROFILE
+############################################
+
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "devops-ec2-instance-profile"
+
+  name = "devops-instance-profile-${random_id.suffix.hex}"
+
   role = aws_iam_role.ec2_role.name
+
 }
 
+############################################
 # ECR REPOSITORIES
+############################################
 
 resource "aws_ecr_repository" "backend_repo" {
-  name = "devops-backend"
+
+  name = "devops-backend-${random_id.suffix.hex}"
+
 }
 
 resource "aws_ecr_repository" "frontend_repo" {
-  name = "devops-frontend"
+
+  name = "devops-frontend-${random_id.suffix.hex}"
+
 }
 
+############################################
 # UBUNTU AMI
+############################################
 
 data "aws_ami" "ubuntu" {
+
   most_recent = true
 
-  owners = ["099720109477"]
+  owners = ["099720109477"] # Canonical
 
   filter {
     name = "name"
+
     values = [
       "ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"
     ]
   }
+
 }
 
+############################################
 # EC2 INSTANCE
+############################################
 
 resource "aws_instance" "app_server" {
 
@@ -120,6 +206,7 @@ resource "aws_instance" "app_server" {
   key_name = var.key_name
 
   tags = {
-    Name = "devops-assessment-server"
+    Name = "devops-server-${random_id.suffix.hex}"
   }
+
 }
