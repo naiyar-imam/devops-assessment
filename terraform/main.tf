@@ -189,6 +189,13 @@ data "aws_ami" "ubuntu" {
 ############################################
 # EC2 INSTANCE
 ############################################
+resource "aws_key_pair" "devops_key" {
+
+  key_name = "devops-key-${random_id.suffix.hex}"
+
+  public_key = file("devops-key.pub")
+
+}
 
 resource "aws_instance" "app_server" {
 
@@ -203,7 +210,7 @@ resource "aws_instance" "app_server" {
 
   iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
-  key_name = var.key_name
+  key_name = aws_key_pair.devops_key.key_name
 
   tags = {
     Name = "devops-server-${random_id.suffix.hex}"

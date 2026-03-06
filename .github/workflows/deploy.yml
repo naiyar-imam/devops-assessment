@@ -33,7 +33,7 @@ jobs:
     - name: Terraform Apply
       run: |
         cd terraform
-        terraform apply -auto-approve -var="key_name=my-key"
+        terraform apply -auto-approve
 
     - name: Get EC2 Public IP
       id: ec2
