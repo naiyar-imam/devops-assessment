@@ -173,4 +173,4 @@ resource "aws_ecr_repository" "frontend_repo" {
   force_delete         = true
 }
 
-#not yet
+#
