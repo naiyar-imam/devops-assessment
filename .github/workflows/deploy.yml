@@ -111,3 +111,5 @@ jobs:
             sudo docker run -d -p 80:80 \
             --name frontend \
             ${{ steps.login-ecr.outputs.registry }}/devops-frontend:${{ github.sha }}
+
+            # Check Running Containers
