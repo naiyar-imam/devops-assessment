@@ -172,3 +172,5 @@ resource "aws_ecr_repository" "frontend_repo" {
   image_tag_mutability = "MUTABLE"
   force_delete         = true
 }
+
+#not yet
