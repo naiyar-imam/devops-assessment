@@ -17,3 +17,5 @@ output "frontend_ecr_url" {
   description = "Frontend ECR repository URL"
   value       = aws_ecr_repository.frontend_repo.repository_url
 }
+
+#nothing to change
